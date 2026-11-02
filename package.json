@@ -23,7 +23,7 @@
     "@upstash/redis": "^1.39.0",
     "@vitejs/plugin-react": "^5.0.0",
     "framer-motion": "^12.23.12",
-    "lucide-react": "^0.468.0",
+    "lucide-react": "^1.65.0",
     "mammoth": "^1.13.0",
     "pdfjs-dist": "^6.4.299",
     "pptxgenjs": "^4.0.1",
