@@ -1,0 +1,16 @@
+# Non-secret settings only. Secrets live in secret.example.yaml (replace values, or use an external secret manager).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clario-config
+  namespace: clario
+data:
+  NODE_ENV: production
+  PORT: "8080"
+  TRUST_PROXY: "true"
+  AI_PROVIDER: groq
+  LOG_LEVEL: info
+  MAX_IN_FLIGHT: "100"
+  SHUTDOWN_DRAIN_MS: "25000"
+  GATEWAY_RATE_LIMIT_PER_MINUTE: "300"
+  # TRUSTED_ORIGINS: "https://clario.example.com"

@@ -1,0 +1,69 @@
+# Alert rules tied to the SLOs in docs/OPERATIONS.md: 99.5% availability, 95% of requests under 1.5 s.
+# Each alert says what is wrong and which runbook section to open.
+groups:
+  - name: clario-slo
+    rules:
+      - alert: ClarioHighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: "More than 5% of requests are failing (5xx)"
+          runbook: "docs/OPERATIONS.md#runbook-high-error-rate"
+      - alert: ClarioErrorBudgetFastBurn
+        # 99.5% target => budget 0.5%. Burning at 14x the allowed rate empties a 30-day budget in about 2 days.
+        expr: |
+          (sum(rate(http_requests_total{status=~"5.."}[1h])) / sum(rate(http_requests_total[1h]))) > (14 * 0.005)
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: "Error budget is burning 14x too fast"
+          runbook: "docs/OPERATIONS.md#slos-slis-and-error-budgets"
+      - alert: ClarioSlowRequests
+        expr: |
+          1 - (sum(rate(http_request_duration_ms_bucket{le="1500"}[10m])) / sum(rate(http_request_duration_ms_count[10m]))) > 0.05
+        for: 10m
+        labels: { severity: ticket }
+        annotations:
+          summary: "More than 5% of requests take longer than 1.5 s"
+          runbook: "docs/OPERATIONS.md#runbook-slow-responses"
+      - alert: ClarioP99Latency
+        expr: |
+          histogram_quantile(0.99, sum by (le) (rate(http_request_duration_ms_bucket[10m]))) > 10000
+        for: 10m
+        labels: { severity: ticket }
+        annotations:
+          summary: "p99 latency above 10 s (tail latency)"
+          runbook: "docs/OPERATIONS.md#runbook-slow-responses"
+  - name: clario-dependencies
+    rules:
+      - alert: ClarioCircuitBreakerOpen
+        expr: increase(circuit_breaker_open_total[10m]) > 0
+        labels: { severity: ticket }
+        annotations:
+          summary: "A circuit breaker opened for {{ $labels.breaker }}"
+          runbook: "docs/OPERATIONS.md#runbook-ai-provider-or-job-board-outage"
+      - alert: ClarioHeavyRetries
+        expr: sum(rate(outbound_retries_total[10m])) > 0.5
+        for: 10m
+        labels: { severity: ticket }
+        annotations:
+          summary: "Calls to {{ $labels.target }} are being retried a lot"
+          runbook: "docs/OPERATIONS.md#runbook-ai-provider-or-job-board-outage"
+  - name: clario-platform
+    rules:
+      - alert: ClarioPodNotReady
+        expr: kube_deployment_status_replicas_available{namespace="clario",deployment="clario"} < 1
+        for: 3m
+        labels: { severity: page }
+        annotations:
+          summary: "No Clario pod is ready"
+          runbook: "docs/OPERATIONS.md#runbook-site-down"
+      - alert: ClarioMemoryHigh
+        expr: process_resident_memory_bytes > 400 * 1024 * 1024
+        for: 15m
+        labels: { severity: ticket }
+        annotations:
+          summary: "Memory is above 400 MB and not falling (possible leak)"
+          runbook: "docs/OPERATIONS.md#runbook-memory-growth"

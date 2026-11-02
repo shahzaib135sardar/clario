@@ -1,0 +1,9 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: clario
+  namespace: clario
+spec:
+  minAvailable: 1     # node drains never take every replica at once
+  selector:
+    matchLabels: { app: clario }

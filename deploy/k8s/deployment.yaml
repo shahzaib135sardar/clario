@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clario
+  namespace: clario
+  labels: { app: clario }
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5            # `kubectl rollout undo` can go back this far
+  selector:
+    matchLabels: { app: clario }
+  strategy:
+    type: RollingUpdate               # new pods must be Ready before old ones are removed
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  template:
+    metadata:
+      labels: { app: clario }
+    spec:
+      serviceAccountName: clario
+      terminationGracePeriodSeconds: 40   # > SHUTDOWN_DRAIN_MS so in-flight requests finish
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile: { type: RuntimeDefault }
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector: { matchLabels: { app: clario } }
+      containers:
+        - name: clario
+          image: ghcr.io/OWNER/clario:latest   # CI replaces this with an immutable tag
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: http, containerPort: 8080 }]
+          envFrom:
+            - configMapRef: { name: clario-config }
+            - secretRef: { name: clario-secrets }
+          resources:
+            requests: { cpu: 100m, memory: 192Mi }
+            limits: { memory: 512Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          # Startup: give a cold container time before the other probes begin.
+          startupProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 2
+            failureThreshold: 30
+          # Liveness: "is the process alive?" Cheap, no dependencies, so a database blip never restarts pods.
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          # Readiness: "should it get traffic?" Checks config, Redis and Supabase; fails while draining.
+          readinessProbe:
+            httpGet: { path: /readyz, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 4
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              exec: { command: ["sleep", "5"] }   # let the load balancer stop routing before SIGTERM
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - { name: tmp, emptyDir: {} }

@@ -1,0 +1,29 @@
+replicaCount: 2
+image:
+  repository: ghcr.io/OWNER/clario
+  tag: latest
+  pullPolicy: IfNotPresent
+# Non-secret settings, exposed as environment variables.
+config:
+  NODE_ENV: production
+  PORT: "8080"
+  TRUST_PROXY: "true"
+  AI_PROVIDER: groq
+  LOG_LEVEL: info
+# Name of a Secret you created out of band (see deploy/k8s/secret.example.yaml). Never put secrets in values.
+existingSecret: clario-secrets
+resources:
+  requests: { cpu: 100m, memory: 192Mi }
+  limits: { memory: 512Mi }
+ingress:
+  enabled: true
+  className: nginx
+  host: clario.example.com
+  tlsSecret: clario-tls
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+podDisruptionBudget:
+  minAvailable: 1

@@ -1,0 +1,20 @@
+# Default deny, then allow only what the app needs: ingress from the ingress controller, DNS and HTTPS out.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: clario
+  namespace: clario
+spec:
+  podSelector: { matchLabels: { app: clario } }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: ingress-nginx }
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: monitoring }
+      ports: [{ port: 8080 }]
+  egress:
+    - to: [{ namespaceSelector: {} }]
+      ports: [{ port: 53, protocol: UDP }, { port: 53, protocol: TCP }]
+    - ports: [{ port: 443, protocol: TCP }]   # Supabase, Upstash, Groq/Anthropic, object storage, job boards

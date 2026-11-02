@@ -1,0 +1,56 @@
+name: Deploy
+# Pull requests get a preview deployment; main goes to production after CI passes; rollback is a manual run.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "deploy = promote latest main; rollback = re-promote an earlier deployment URL"
+        type: choice
+        options: [deploy, rollback]
+        default: deploy
+      rollback_to:
+        description: "For rollback: the deployment URL or id to promote"
+        required: false
+permissions:
+  contents: read
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+env:
+  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+jobs:
+  production:
+    if: >-
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success') ||
+      (github.event_name == 'workflow_dispatch' && inputs.action == 'deploy')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: npm i -g vercel@latest
+      - run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+      - run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+      - id: deploy
+        run: echo "url=$(vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})" >> "$GITHUB_OUTPUT"
+      - name: Smoke test (liveness, then headers)
+        run: |
+          for i in 1 2 3 4 5; do
+            if curl -fsS "${{ steps.deploy.outputs.url }}/api/internal/health"; then ok=1; break; fi
+            sleep 5
+          done
+          test "${ok:-0}" = 1
+          curl -fsSI "${{ steps.deploy.outputs.url }}" | grep -i "content-security-policy"
+  rollback:
+    if: github.event_name == 'workflow_dispatch' && inputs.action == 'rollback'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - run: npm i -g vercel@latest
+      - run: vercel rollback "${{ inputs.rollback_to }}" --token=${{ secrets.VERCEL_TOKEN }}

@@ -1,0 +1,32 @@
+# Self-host equivalent of the Vercel cron: refresh the job-board caches every 8 hours.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: clario-warm-feeds
+  namespace: clario
+spec:
+  schedule: "0 */8 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 300
+      template:
+        spec:
+          restartPolicy: OnFailure
+          securityContext: { runAsNonRoot: true, runAsUser: 1000 }
+          containers:
+            - name: warm
+              image: curlimages/curl:8.10.1
+              envFrom:
+                - secretRef: { name: clario-secrets }
+              command: ["sh", "-c"]
+              args:
+                - >-
+                  curl -fsS --max-time 120 -H "Authorization: Bearer $CRON_SECRET"
+                  http://clario.clario.svc.cluster.local/api/internal/warm-feeds
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities: { drop: [ALL] }

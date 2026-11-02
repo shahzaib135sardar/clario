@@ -1,0 +1,13 @@
+node_modules
+dist
+dist-server
+.git
+.github
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+coverage
+docs
+deploy
+**/__tests__
