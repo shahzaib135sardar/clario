@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Multi-stage build: the final image holds only the built web app and the bundled server.
 
-FROM node:22-alpine AS build
+FROM node:26-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -17,7 +17,7 @@ ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL \
     VITE_FEATURE_AI_CHAT=$VITE_FEATURE_AI_CHAT
 RUN npx vite build && npm run build:server
 
-FROM node:22-alpine AS runtime
+FROM node:26-alpine AS runtime
 ENV NODE_ENV=production PORT=8080 STATIC_DIR=/app/dist TRUST_PROXY=true
 WORKDIR /app
 COPY --from=build --chown=node:node /app/dist ./dist
